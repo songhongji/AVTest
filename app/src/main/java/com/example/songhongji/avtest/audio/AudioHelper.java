@@ -1,12 +1,15 @@
 package com.example.songhongji.avtest.audio;
 
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -16,47 +19,53 @@ import java.util.List;
 /**
  * 用于实现录音   暂停录音
  */
-public class AudioRecorder {
-    private static AudioRecorder audioRecorder;
+public class AudioHelper {
+    private static AudioHelper audioHelper;
     //音频输入-麦克风
     private final static int AUDIO_INPUT = MediaRecorder.AudioSource.MIC;
     //采用频率
     //44100是目前的标准，但是某些设备仍然支持22050，16000，11025
     //采样频率一般共分为22.05KHz、44.1KHz、48KHz三个等级
-    private final static int AUDIO_SAMPLE_RATE = 16000;
+    private final static int AUDIO_SAMPLE_RATE = 22050;
     //声道 单声道
-    private final static int AUDIO_CHANNEL = AudioFormat.CHANNEL_IN_MONO;
+    private final static int AUDIO_CHANNEL = AudioFormat.CHANNEL_IN_STEREO;
     //编码
     private final static int AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
-    // 缓冲区字节大小
-    private int bufferSizeInBytes = 0;
+    // 录音缓冲区字节大小
+    private int bufferSizeRecordInBytes = 0;
+
+    // 播放缓冲区字节大小
+    private int bufferSizeTrackInBytes = 0;
 
     //录音对象
     private AudioRecord audioRecord;
+
+    //播放对象
+    private AudioTrack audioTrack;
 
     //录音状态
     private Status status = Status.STATUS_NO_READY;
 
     //文件名
-    private String fileName;
+    private String fileName = "test";
 
     //录音文件
     private List<String> filesName = new ArrayList<>();
 
-    private AudioRecorder() {
+    private AudioHelper() {
     }
 
     //单例模式
-    public static AudioRecorder getInstance() {
-        if (audioRecorder == null) {
-            audioRecorder = new AudioRecorder();
+    public static AudioHelper getInstance() {
+        if (audioHelper == null) {
+            audioHelper = new AudioHelper();
         }
-        return audioRecorder;
-
+        return audioHelper;
     }
 
     /**
      * 创建录音对象
+     *
      * @param fileName：录音文件名字
      * @param audioSource：音频输入来源，一般为MIC
      * @param sampleRateInHz：采样频率一般共分为22.05KHz、44.1KHz、48KHz三个等级
@@ -65,9 +74,9 @@ public class AudioRecorder {
      */
     public void createAudio(String fileName, int audioSource, int sampleRateInHz, int channelConfig, int audioFormat) {
         // 获得缓冲区字节大小
-        bufferSizeInBytes = AudioRecord.getMinBufferSize(sampleRateInHz,
+        bufferSizeRecordInBytes = AudioRecord.getMinBufferSize(sampleRateInHz,
                 channelConfig, channelConfig);
-        audioRecord = new AudioRecord(audioSource, sampleRateInHz, channelConfig, audioFormat, bufferSizeInBytes);
+        audioRecord = new AudioRecord(audioSource, sampleRateInHz, channelConfig, audioFormat, bufferSizeRecordInBytes);
         this.fileName = fileName;
     }
 
@@ -78,11 +87,16 @@ public class AudioRecorder {
      */
     public void createDefaultAudio(String fileName) {
         // 获得缓冲区字节大小
-        bufferSizeInBytes = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
+        bufferSizeRecordInBytes = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
                 AUDIO_CHANNEL, AUDIO_ENCODING);
-        audioRecord = new AudioRecord(AUDIO_INPUT, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL, AUDIO_ENCODING, bufferSizeInBytes);
+        audioRecord = new AudioRecord(AUDIO_INPUT, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL, AUDIO_ENCODING, bufferSizeRecordInBytes);
         this.fileName = fileName;
         status = Status.STATUS_READY;
+    }
+
+    public void createDefaultTrack() {
+        bufferSizeTrackInBytes = AudioTrack.getMinBufferSize(AUDIO_SAMPLE_RATE, AUDIO_CHANNEL, AUDIO_ENCODING);
+        audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL, AUDIO_ENCODING, bufferSizeTrackInBytes, AudioTrack.MODE_STREAM);
     }
 
 
@@ -93,13 +107,17 @@ public class AudioRecorder {
      */
     public void startRecord(final RecordStreamListener listener) {
 
+        if (audioRecord == null) {
+            createDefaultAudio(fileName);
+        }
+
         if (status == Status.STATUS_NO_READY || TextUtils.isEmpty(fileName)) {
             throw new IllegalStateException("录音尚未初始化,请检查是否禁止了录音权限~");
         }
         if (status == Status.STATUS_START) {
             throw new IllegalStateException("正在录音");
         }
-        Log.d("AudioRecorder","===startRecord==="+audioRecord.getState());
+        Log.d("AudioHelper", "===startRecord===" + audioRecord.getState());
         audioRecord.startRecording();
 
         new Thread(new Runnable() {
@@ -114,7 +132,7 @@ public class AudioRecorder {
      * 暂停录音
      */
     public void pauseRecord() {
-        Log.d("AudioRecorder","===pauseRecord===");
+        Log.d("AudioHelper", "===pauseRecord===");
         if (status != Status.STATUS_START) {
             throw new IllegalStateException("没有在录音");
         } else {
@@ -127,7 +145,7 @@ public class AudioRecorder {
      * 停止录音
      */
     public void stopRecord() {
-        Log.d("AudioRecorder","===stopRecord===");
+        Log.d("AudioHelper", "===stopRecord===");
         if (status == Status.STATUS_NO_READY || status == Status.STATUS_READY) {
             throw new IllegalStateException("录音尚未开始");
         } else {
@@ -138,10 +156,60 @@ public class AudioRecorder {
     }
 
     /**
+     * 开始播放
+     */
+    public void startPlay() {
+        if (audioTrack == null) {
+            createDefaultTrack();
+        }
+
+        audioTrack.play();
+
+        final File file = new File(FileUtils.getWavFileAbsolutePath(fileName));
+        try {
+            final FileInputStream fileInputStream = new FileInputStream(file);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+
+                    try {
+                        byte[] tempBuf = new byte[bufferSizeTrackInBytes];
+                        while (fileInputStream.available() > 0) {
+                            int readCount = fileInputStream.read(tempBuf);
+                            if (readCount == AudioTrack.ERROR_INVALID_OPERATION || readCount == AudioTrack.ERROR_BAD_VALUE) {
+                                continue;
+                            }
+                            if (readCount != 0 && readCount != -1) {
+                                audioTrack.write(tempBuf, 0, readCount);
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                }
+            }).start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 暂停播放
+     */
+    public void pausePlay() {
+        if (audioTrack == null) {
+            return;
+        }
+
+        audioTrack.pause();
+    }
+
+    /**
      * 释放资源
      */
     public void release() {
-        Log.d("AudioRecorder","===release===");
+        Log.d("AudioHelper", "===release===");
         //假如有暂停录音
         try {
             if (filesName.size() > 0) {
@@ -158,7 +226,7 @@ public class AudioRecorder {
                 //这里由于只要录音过filesName.size都会大于0,没录音时fileName为null
                 //会报空指针 NullPointerException
                 // 将单个pcm文件转化为wav文件
-                //Log.d("AudioRecorder", "=====makePCMFileToWAVFile======");
+                //Log.d("AudioHelper", "=====makePCMFileToWAVFile======");
                 //makePCMFileToWAVFile();
             }
         } catch (IllegalStateException e) {
@@ -168,6 +236,11 @@ public class AudioRecorder {
         if (audioRecord != null) {
             audioRecord.release();
             audioRecord = null;
+        }
+
+        if (audioTrack != null) {
+            audioTrack.release();
+            audioTrack = null;
         }
 
         status = Status.STATUS_NO_READY;
@@ -195,7 +268,7 @@ public class AudioRecorder {
      */
     private void writeDataTOFile(RecordStreamListener listener) {
         // new一个byte数组用来存一些字节数据，大小为缓冲区大小
-        byte[] audiodata = new byte[bufferSizeInBytes];
+        byte[] audiodata = new byte[bufferSizeRecordInBytes];
 
         FileOutputStream fos = null;
         int readsize = 0;
@@ -213,16 +286,16 @@ public class AudioRecorder {
             }
             fos = new FileOutputStream(file);// 建立一个可存取字节的文件
         } catch (IllegalStateException e) {
-            Log.e("AudioRecorder", e.getMessage());
+            Log.e("AudioHelper", e.getMessage());
             throw new IllegalStateException(e.getMessage());
         } catch (FileNotFoundException e) {
-            Log.e("AudioRecorder", e.getMessage());
+            Log.e("AudioHelper", e.getMessage());
 
         }
         //将录音状态设置成正在录音状态
         status = Status.STATUS_START;
         while (status == Status.STATUS_START) {
-            readsize = audioRecord.read(audiodata, 0, bufferSizeInBytes);
+            readsize = audioRecord.read(audiodata, 0, bufferSizeRecordInBytes);
             if (AudioRecord.ERROR_INVALID_OPERATION != readsize && fos != null) {
                 try {
                     fos.write(audiodata);
@@ -231,7 +304,7 @@ public class AudioRecorder {
                         listener.recordOfByte(audiodata, 0, audiodata.length);
                     }
                 } catch (IOException e) {
-                    Log.e("AudioRecorder", e.getMessage());
+                    Log.e("AudioHelper", e.getMessage());
                 }
             }
         }
@@ -240,7 +313,7 @@ public class AudioRecorder {
                 fos.close();// 关闭写入流
             }
         } catch (IOException e) {
-            Log.e("AudioRecorder", e.getMessage());
+            Log.e("AudioHelper", e.getMessage());
         }
     }
 
@@ -257,10 +330,10 @@ public class AudioRecorder {
                     //操作成功
                 } else {
                     //操作失败
-                    Log.e("AudioRecorder", "mergePCMFilesToWAVFile fail");
+                    Log.e("AudioHelper", "mergePCMFilesToWAVFile fail");
                     throw new IllegalStateException("mergePCMFilesToWAVFile fail");
                 }
-                fileName = null;
+//                fileName = null;
             }
         }).start();
     }
@@ -276,10 +349,10 @@ public class AudioRecorder {
                     //操作成功
                 } else {
                     //操作失败
-                    Log.e("AudioRecorder", "makePCMFileToWAVFile fail");
+                    Log.e("AudioHelper", "makePCMFileToWAVFile fail");
                     throw new IllegalStateException("makePCMFileToWAVFile fail");
                 }
-                fileName = null;
+//                fileName = null;
             }
         }).start();
     }
@@ -305,7 +378,7 @@ public class AudioRecorder {
     /**
      * 录音对象的状态
      */
-    public  enum Status {
+    public enum Status {
         //未开始
         STATUS_NO_READY,
         //预备

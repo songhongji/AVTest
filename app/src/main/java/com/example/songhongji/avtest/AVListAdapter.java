@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.songhongji.avtest.audio.AudioRecordActivity;
 import com.example.songhongji.avtest.picture.PictureActivity;
 
 import java.util.ArrayList;
@@ -85,7 +86,13 @@ public class AVListAdapter extends RecyclerView.Adapter<AVListAdapter.AVViewHold
                 });
                 break;
             case Constants.AUDIO:
-
+                textView.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        Intent intent = new Intent(textView.getContext(), AudioRecordActivity.class);
+                        textView.getContext().startActivity(intent);
+                    }
+                });
                 break;
             default:
                 break;
