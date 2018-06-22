@@ -12,6 +12,7 @@ import android.widget.Toast;
 
 import com.example.songhongji.avtest.audio.AudioRecordActivity;
 import com.example.songhongji.avtest.picture.PictureActivity;
+import com.example.songhongji.avtest.video.CameraPreviewActivity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,7 +82,8 @@ public class AVListAdapter extends RecyclerView.Adapter<AVListAdapter.AVViewHold
                 textView.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        Toast.makeText(textView.getContext(), name, Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(textView.getContext(), CameraPreviewActivity.class);
+                        textView.getContext().startActivity(intent);
                     }
                 });
                 break;
