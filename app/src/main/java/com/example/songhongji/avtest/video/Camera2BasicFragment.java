@@ -90,7 +90,6 @@ public class Camera2BasicFragment extends Fragment
     /**
      * Camera state: Waiting for the focus to be locked.
      * 等待焦点被锁定
-     *
      */
     private static final int STATE_WAITING_LOCK = 1;
 
@@ -482,8 +481,17 @@ public class Camera2BasicFragment extends Fragment
     @SuppressWarnings("SuspiciousNameCombination")
     private void setUpCameraOutputs(int width, int height) {
         Activity activity = getActivity();
+        if (activity == null) {
+            return;
+        }
+        // 获取CameraManager
+        // CameraManager： 管理手机上的所有摄像头设备，它的作用主要是获取摄像头列表和打开指定的摄像头
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        if (manager == null) {
+            return;
+        }
         try {
+
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
@@ -590,16 +598,23 @@ public class Camera2BasicFragment extends Fragment
 
     /**
      * Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
+     * 打开摄像头
      */
     private void openCamera(int width, int height) {
-        if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
+        Activity activity = getActivity();
+        if (activity == null) {
+            return;
+        }
+
+        // 检查权限
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
             return;
         }
+
         setUpCameraOutputs(width, height);
         configureTransform(width, height);
-        Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
